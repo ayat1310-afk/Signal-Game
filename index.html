@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#111;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  min-height:100vh; font-family:monospace;
+}
+#ui-bar {
+  width:860px; display:flex; justify-content:space-between;
+  align-items:center; padding:10px 4px;
+  color:#555; font-size:11px; letter-spacing:0.15em; text-transform:uppercase;
+}
+#hint {
+  width:860px; text-align:center; color:#333;
+  font-size:10px; letter-spacing:0.1em; padding:7px 0 2px 0; text-transform:uppercase;
+}
+
+/* ── EDITOR PANEL ── */
+#editor {
+  display:none;
+  position:fixed; top:0; right:0; width:300px; height:100vh;
+  background:#0e0e0e; border-left:1px solid #222;
+  overflow-y:auto; z-index:100;
+  padding:18px 16px 40px;
+  font-size:11px; color:#aaa; font-family:monospace;
+}
+#editor.open { display:block; }
+#editor h2 {
+  color:#ddd; font-size:12px; letter-spacing:0.2em;
+  text-transform:uppercase; margin-bottom:18px; border-bottom:1px solid #222; padding-bottom:8px;
+}
+#editor h3 {
+  color:#666; font-size:10px; letter-spacing:0.15em;
+  text-transform:uppercase; margin:18px 0 8px;
+}
+.field { display:flex; flex-direction:column; margin-bottom:10px; }
+.field label { color:#666; font-size:10px; margin-bottom:4px; letter-spacing:0.08em; }
+.field input[type=range] { width:100%; accent-color:#c8ff00; cursor:pointer; }
+.field input[type=text], .field input[type=number] {
+  background:#1a1a1a; border:1px solid #2a2a2a; color:#ccc;
+  padding:5px 8px; font-size:11px; font-family:monospace;
+  border-radius:2px; width:100%;
+}
+.field input:focus { outline:none; border-color:#444; }
+.val { color:#c8ff00; font-size:10px; margin-left:4px; }
+#editor-close {
+  position:sticky; top:0; width:100%;
+  background:#0e0e0e; border:none; color:#555;
+  font-family:monospace; font-size:10px; letter-spacing:0.15em;
+  text-transform:uppercase; padding:8px 0 12px; cursor:pointer;
+  text-align:right;
+}
+#editor-close:hover { color:#aaa; }
+.apply-btn {
+  background:none; border:1px solid #2a2a2a; color:#888;
+  font-family:monospace; font-size:10px; letter-spacing:0.1em;
+  text-transform:uppercase; padding:7px 12px; cursor:pointer;
+  width:100%; margin-top:6px; border-radius:2px;
+}
+.apply-btn:hover { border-color:#555; color:#ccc; }
+.level-obs-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.level-obs-row label { color:#555; font-size:10px; min-width:52px; }
+.level-obs-row input[type=number] {
+  background:#1a1a1a; border:1px solid #222; color:#bbb;
+  padding:4px 6px; font-size:11px; font-family:monospace;
+  border-radius:2px; width:80px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui-bar">
+  <span id="level-label">Level 1</span>
+  <span>S I G N A L</span>
+  <span id="battery-label">Battery: 100%</span>
+</div>
+
+<div id="game-container"></div>
+
+<div id="hint">→/D move &nbsp;|&nbsp; ←/A back &nbsp;|&nbsp; ↑/W jump &nbsp;|&nbsp; E edit &nbsp;|&nbsp; click battery to recharge</div>
+
+<!-- EDITOR PANEL -->
+<div id="editor">
+  <button id="editor-close">✕ close editor</button>
+  <h2>✏️ Game Editor</h2>
+  <p style="color:#444;font-size:9px;line-height:1.6;">Changes apply instantly. Press E to close and keep playing.</p>
+
+  <h3>Background</h3>
+  <div class="field">
+    <label>Hue (colour) <span class="val" id="v-hue"></span></label>
+    <input type="range" id="e-hue" min="0" max="360" step="1">
+  </div>
+  <div class="field">
+    <label>Saturation level 1 (vivid) <span class="val" id="v-sat-start"></span></label>
+    <input type="range" id="e-sat-start" min="0" max="100" step="1">
+  </div>
+  <div class="field">
+    <label>Saturation final level (dull) <span class="val" id="v-sat-end"></span></label>
+    <input type="range" id="e-sat-end" min="0" max="100" step="1">
+  </div>
+  <div class="field">
+    <label>Brightness <span class="val" id="v-brightness"></span></label>
+    <input type="range" id="e-brightness" min="20" max="100" step="1">
+  </div>
+
+  <h3>Ground</h3>
+  <div class="field">
+    <label>Ground height (0=top, 1=bottom) <span class="val" id="v-ground"></span></label>
+    <input type="range" id="e-ground" min="0.4" max="0.95" step="0.01">
+  </div>
+
+  <h3>Character</h3>
+  <div class="field">
+    <label>Starting speed <span class="val" id="v-speed-start"></span></label>
+    <input type="range" id="e-speed-start" min="0.5" max="8" step="0.1">
+  </div>
+  <div class="field">
+    <label>Speed lost per level <span class="val" id="v-speed-loss"></span></label>
+    <input type="range" id="e-speed-loss" min="0" max="1" step="0.01">
+  </div>
+  <div class="field">
+    <label>Minimum speed <span class="val" id="v-speed-min"></span></label>
+    <input type="range" id="e-speed-min" min="0.1" max="3" step="0.05">
+  </div>
+
+  <h3>Obstacle (triangle)</h3>
+  <div class="field">
+    <label>Height (px) <span class="val" id="v-obs-h"></span></label>
+    <input type="range" id="e-obs-h" min="10" max="120" step="1">
+  </div>
+  <div class="field">
+    <label>Width (px) <span class="val" id="v-obs-w"></span></label>
+    <input type="range" id="e-obs-w" min="10" max="80" step="1">
+  </div>
+  <div class="field">
+    <label>Rise speed <span class="val" id="v-obs-rise"></span></label>
+    <input type="range" id="e-obs-rise" min="2" max="30" step="1">
+  </div>
+  <div class="field">
+    <label>Trigger distance (px before char reaches) <span class="val" id="v-obs-trig"></span></label>
+    <input type="range" id="e-obs-trig" min="10" max="200" step="1">
+  </div>
+  <div class="field">
+    <label>Colour (R G B — three numbers 0–255)</label>
+    <div style="display:flex;gap:6px;margin-top:4px;">
+      <input type="number" id="e-obs-r" min="0" max="255" style="width:60px;">
+      <input type="number" id="e-obs-g" min="0" max="255" style="width:60px;">
+      <input type="number" id="e-obs-b" min="0" max="255" style="width:60px;">
+    </div>
+  </div>
+
+  <h3>Obstacle position per level</h3>
+  <p style="color:#444;font-size:9px;line-height:1.6;margin-bottom:8px;">X position in pixels (left=0, right=860). Where the triangle appears on each level.</p>
+  <div id="level-positions"></div>
+
+  <h3>Goal (star)</h3>
+  <div class="field">
+    <label>Position (0=left, 1=right) <span class="val" id="v-goal-x"></span></label>
+    <input type="range" id="e-goal-x" min="0.3" max="0.99" step="0.01">
+  </div>
+  <div class="field">
+    <label>Colour (R G B)</label>
+    <div style="display:flex;gap:6px;margin-top:4px;">
+      <input type="number" id="e-goal-r" min="0" max="255" style="width:60px;">
+      <input type="number" id="e-goal-g" min="0" max="255" style="width:60px;">
+      <input type="number" id="e-goal-b" min="0" max="255" style="width:60px;">
+    </div>
+  </div>
+
+  <h3>Battery</h3>
+  <div class="field">
+    <label>Drain per level (%) <span class="val" id="v-bat-drain"></span></label>
+    <input type="range" id="e-bat-drain" min="0" max="30" step="1">
+  </div>
+
+  <h3>Levels & Screen</h3>
+  <div class="field">
+    <label>Total levels <span class="val" id="v-levels"></span></label>
+    <input type="range" id="e-levels" min="2" max="20" step="1">
+  </div>
+  <div class="field">
+    <label>Screen shrink per level (px) <span class="val" id="v-shrink"></span></label>
+    <input type="range" id="e-shrink" min="0" max="20" step="1">
+  </div>
+
+  <h3>Apply</h3>
+  <button class="apply-btn" id="apply-btn">↺ restart level with changes</button>
+  <button class="apply-btn" id="restart-game-btn" style="margin-top:4px;">↺↺ restart game from level 1</button>
+</div>
+
+<script>
+// ============================================================
+//  CONFIG — all defaults live here
+// ============================================================
+const CONFIG = {
+  CANVAS_W: 860,
+  CANVAS_H: 360,
+
+  BG_HUE:            195,  // bright blue-green level 1
+  BG_SAT_START:      62,   // vivid level 1
+  BG_SAT_END:        10,   // muted grey-blue level 5
+  BG_BRIGHTNESS:     86,   // level 1 brightness
+  BG_BRIGHTNESS_END: 48,   // level 5 — noticeably darker and gloomier
+
+  GROUND_Y_RATIO: 0.76,
+
+  CHAR_START_X:     80,
+  CHAR_SPEED_START: 3.6,   // brisk on level 1
+  CHAR_SPEED_LOSS:  0.65,  // constant loss — each level noticeably slower
+  CHAR_MIN_SPEED:   0.3,
+
+  GOAL_X_RATIO:  0.90,
+  GOAL_COLOR:    [255, 210, 55],
+
+  OBSTACLE_LEVEL1_X_RATIO: 0.80,
+  OBSTACLE_STEP:            30,
+  OBSTACLE_TRIGGER_DIST:    42,
+  OBSTACLE_RISE_SPEED:      14,
+  OBSTACLE_HEIGHT:          42,  // taller spike — single point up
+  OBSTACLE_WIDTH:           28,
+  OBSTACLE_COLOR:           [195, 65, 42],
+
+  BATTERY_START:            45,
+  BATTERY_DRAIN_PER_LEVEL:  10,
+
+  TOTAL_LEVELS:    5,
+  SHRINK_PER_LEVEL: 14,  // noticeable suffocation each level
+  DEATH_DURATION:  58,
+};
+
+// Per-level obstacle X overrides (null = use auto formula)
+let levelObstacleX = [];
+
+function buildLevelObstacles() {
+  levelObstacleX = [];
+  for (let i = 0; i < CONFIG.TOTAL_LEVELS; i++) {
+    let auto = Math.round(860 * CONFIG.OBSTACLE_LEVEL1_X_RATIO - CONFIG.OBSTACLE_STEP * i);
+    auto = Math.max(CONFIG.CHAR_START_X + 160, auto);
+    levelObstacleX.push(auto);
+  }
+}
+buildLevelObstacles();
+
+// ============================================================
+//  Engine
+// ============================================================
+let level = 1;
+let charX, charY, groundY;
+let charSpeed;
+let obstacleX, obstacleTriggered, obstacleY, obstacleVisible;
+let isDead, deathTimer, deathPieces;
+let won, moving, movingLeft, shrinkY, battery;
+let isJumping, jumpVY;
+let gameState = "start";
+const JUMP_FORCE = -11;
+const GRAVITY    = 0.55;
+
+let winGlowTimer = 0;  // counts up when won, drives star burst
+
+let batteryZoomed     = false;
+let batteryRecharging = false;
+let batteryZoomScale  = 1;
+let batteryZoomTarget = 1;
+let rechargeStartVal  = 0;
+let rechargeStartTime = 0;
+const RECHARGE_DURATION = 20000;
+
+function setup() {
+  let cnv = createCanvas(CONFIG.CANVAS_W, CONFIG.CANVAS_H);
+  cnv.parent('game-container');
+  colorMode(HSB, 360, 100, 100, 100);
+  textFont('monospace');
+  buildLevelObstacles();
+  initEditorUI();
+  initLevel();
+}
+
+function initLevel() {
+  groundY   = CONFIG.CANVAS_H * CONFIG.GROUND_Y_RATIO;
+  charX     = CONFIG.CHAR_START_X;
+  charY     = groundY;
+  charSpeed = max(CONFIG.CHAR_MIN_SPEED, CONFIG.CHAR_SPEED_START - CONFIG.CHAR_SPEED_LOSS * (level - 1));
+
+  obstacleX         = levelObstacleX[level - 1] || (width * 0.7);
+  obstacleTriggered = false;
+  obstacleY         = groundY;
+  obstacleVisible   = false;
+  isDead            = false;
+  deathTimer        = 0;
+  deathPieces       = [];
+  won               = false;
+  moving            = false;
+  movingLeft        = false;
+  isJumping         = false;
+  jumpVY            = 0;
+  winGlowTimer      = 0;
+  shrinkY           = CONFIG.SHRINK_PER_LEVEL * (level - 1);
+
+  // Battery starts at 45% on level 1, drains each level
+  battery = max(0, CONFIG.BATTERY_START - CONFIG.BATTERY_DRAIN_PER_LEVEL * (level - 1));
+
+  batteryZoomed     = false;
+  batteryZoomTarget = 1;
+  batteryZoomScale  = 1;
+  batteryRecharging = false;
+
+  document.getElementById('level-label').textContent   = 'Level ' + level;
+  document.getElementById('battery-label').textContent = 'Battery: ' + Math.round(battery) + '%';
+}
+
+// ── DRAW ──────────────────────────────────────────────────
+function draw() {
+  if (gameState === "start") { drawStartScreen(); return; }
+
+  let satT = (level - 1) / max(1, CONFIG.TOTAL_LEVELS - 1);
+  let sat  = lerp(CONFIG.BG_SAT_START, CONFIG.BG_SAT_END, satT);
+  let bri  = lerp(CONFIG.BG_BRIGHTNESS, CONFIG.BG_BRIGHTNESS_END, satT);
+  background(CONFIG.BG_HUE, sat, bri);
+
+  colorMode(RGB, 255);
+  noStroke(); fill(0);
+  rect(0,             0,          width,   shrinkY);
+  rect(0,             height-shrinkY, width, shrinkY);
+  rect(0,             0,          shrinkY, height);
+  rect(width-shrinkY, 0,          shrinkY, height);
+
+  drawFloor();
+  drawGoal();
+  drawObstacle();
+  drawBattery();
+
+  if (!isDead) {
+    if (moving     && !won) charX += charSpeed;
+    if (movingLeft && !won) charX -= charSpeed;
+    charX = max(10, charX);
+
+    if (isJumping) {
+      charY  += jumpVY;
+      jumpVY += GRAVITY;
+      if (charY >= groundY) { charY = groundY; isJumping = false; jumpVY = 0; }
+    }
+
+    checkTrigger();
+    checkCollision();
+    checkWin();
+    drawStickman(charX, charY, true);
+  } else {
+    deathTimer++;
+    drawDeathPieces();
+    if (deathTimer > CONFIG.DEATH_DURATION) {
+      colorMode(RGB, 255);
+      fill(30, 20, 15, 150); textSize(11); textAlign(CENTER);
+      text("↺  retry  —  press any key", width / 2, groundY + 42);
+    }
+  }
+
+  if (won) {
+    winGlowTimer++;
+    drawWinGlow();
+    colorMode(RGB, 255);
+    fill(30, 20, 15, 150); textSize(11); textAlign(CENTER);
+    if (level >= CONFIG.TOTAL_LEVELS) text("complete", width / 2, groundY + 42);
+    else text("continue →  press any key", width / 2, groundY + 42);
+  }
+
+  colorMode(HSB, 360, 100, 100, 100);
+}
+
+// ── SCREENS ───────────────────────────────────────────────
+function drawStartScreen() {
+  colorMode(HSB, 360, 100, 100, 100);
+  background(CONFIG.BG_HUE, CONFIG.BG_SAT_START, CONFIG.BG_BRIGHTNESS);
+  colorMode(RGB, 255);
+  let gy = CONFIG.CANVAS_H * CONFIG.GROUND_Y_RATIO;
+  stroke(0,0,0,50); strokeWeight(1); line(0, gy, width, gy);
+  drawStickman(CONFIG.CHAR_START_X, gy, false);
+  // star
+  let gx = width * CONFIG.GOAL_X_RATIO, sy = gy - 18;
+  noStroke();
+  for (let r = 48; r > 0; r -= 5) fill(CONFIG.GOAL_COLOR[0],CONFIG.GOAL_COLOR[1],CONFIG.GOAL_COLOR[2], map(r,0,48,0,38)), ellipse(gx,sy,r*2,r*2);
+  fill(...CONFIG.GOAL_COLOR); drawStar(gx, sy, 6, 14, 5);
+  stroke(CONFIG.GOAL_COLOR[0],CONFIG.GOAL_COLOR[1],CONFIG.GOAL_COLOR[2],100); strokeWeight(1.5); line(gx,sy+14,gx,gy);
+  drawBattery();
+  noStroke();
+  fill(20,15,10,210); textSize(26); textAlign(CENTER,CENTER); text("S I G N A L", width/2, height*0.32);
+  fill(20,15,10,120); textSize(11); text("press any key to begin", width/2, height*0.46);
+  fill(20,15,10,65);  textSize(9);  text("→/D move   ←/A back   ↑/W jump   E = editor", width/2, height*0.56);
+  colorMode(HSB,360,100,100,100);
+}
+
+// ── DRAW HELPERS ──────────────────────────────────────────
+function drawFloor() {
+  colorMode(RGB,255);
+  stroke(0,0,0,50); strokeWeight(1); line(0,groundY,width,groundY);
+  noStroke();
+  for (let i=1;i<5;i++) { fill(0,0,0,10-i*2); rect(0,groundY+i,width,2); }
+}
+
+function drawGoal() {
+  colorMode(RGB,255);
+  let gx=width*CONFIG.GOAL_X_RATIO, gy=groundY-18;
+  noStroke();
+  for (let r=50;r>0;r-=5) { fill(CONFIG.GOAL_COLOR[0],CONFIG.GOAL_COLOR[1],CONFIG.GOAL_COLOR[2],map(r,0,50,0,36)); ellipse(gx,gy,r*2,r*2); }
+  fill(...CONFIG.GOAL_COLOR); drawStar(gx,gy,6,14,5);
+  stroke(CONFIG.GOAL_COLOR[0],CONFIG.GOAL_COLOR[1],CONFIG.GOAL_COLOR[2],110); strokeWeight(1.5); line(gx,gy+14,gx,groundY);
+  colorMode(HSB,360,100,100,100);
+}
+
+function drawStar(x,y,r1,r2,pts) {
+  beginShape();
+  for (let i=0;i<pts*2;i++) {
+    let a=(PI/pts)*i-HALF_PI, r=(i%2===0)?r2:r1;
+    vertex(x+cos(a)*r, y+sin(a)*r);
+  }
+  endShape(CLOSE);
+}
+
+function drawWinGlow() {
+  colorMode(RGB,255);
+  let gx = width * CONFIG.GOAL_X_RATIO;
+  let gy = groundY - 18;
+  let t  = min(1, winGlowTimer / 40); // 0→1 over 40 frames
+
+  // Expanding burst rings
+  for (let ring = 0; ring < 4; ring++) {
+    let ringT = min(1, max(0, t - ring * 0.15));
+    let r = ringT * (80 + ring * 30);
+    let a = (1 - ringT) * 180;
+    noStroke(); fill(255, 230, 80, a);
+    ellipse(gx, gy, r * 2, r * 2);
+  }
+
+  // Bright centre flash — peaks early then fades
+  let flash = t < 0.3 ? map(t, 0, 0.3, 0, 255) : map(t, 0.3, 1, 255, 60);
+  noStroke(); fill(255, 255, 200, flash);
+  ellipse(gx, gy, 32, 32);
+
+  // Radial spikes shooting out
+  let spikeCount = 8;
+  stroke(255, 240, 100, flash * 0.8); strokeWeight(1.5);
+  for (let i = 0; i < spikeCount; i++) {
+    let angle = (TWO_PI / spikeCount) * i + t * 0.5;
+    let len   = t * 55;
+    line(gx, gy, gx + cos(angle) * len, gy + sin(angle) * len);
+  }
+
+  // Redraw star bright on top
+  noStroke(); fill(255, 255, 180, min(255, flash + 80));
+  drawStar(gx, gy, 7, 17, 5);
+
+  colorMode(HSB,360,100,100,100);
+}
+
+function drawObstacle() {
+  if (!obstacleVisible) return;
+  colorMode(RGB,255);
+  if (obstacleY > groundY - CONFIG.OBSTACLE_HEIGHT) {
+    obstacleY -= CONFIG.OBSTACLE_RISE_SPEED;
+    obstacleY  = max(obstacleY, groundY - CONFIG.OBSTACLE_HEIGHT);
+  }
+  let tx = obstacleX;
+  let tw = CONFIG.OBSTACLE_WIDTH;
+  // Shadow
+  noStroke(); fill(0,0,0,28); ellipse(tx, groundY, tw*1.5, 6);
+  // Single spike — one point at top centre, wide base left and right
+  fill(...CONFIG.OBSTACLE_COLOR); noStroke();
+  triangle(
+    tx - tw/2, groundY,   // base left
+    tx + tw/2, groundY,   // base right
+    tx,        obstacleY  // single tip pointing up
+  );
+  // Edge highlight on left face
+  stroke(255,255,255,40); strokeWeight(1);
+  line(tx - tw/2, groundY, tx, obstacleY);
+  colorMode(HSB,360,100,100,100);
+}
+
+function drawStickman(x,y,animated) {
+  colorMode(RGB,255);
+  let hR=10, bH=28, lH=20, aH=14;
+  let swing=(animated&&moving)?sin(frameCount*0.28)*10:0;
+
+  // Shadow
+  noFill(); fill(0,0,0,22);
+  ellipse(x, y+3, 20, 6);
+
+  stroke(30,20,15); strokeWeight(2); noFill();
+
+  // Head
+  ellipse(x, y-bH-hR*1.4, hR*2, hR*2);
+  // Body
+  line(x, y-bH-hR*0.4, x, y);
+  // Arms
+  line(x, y-bH*0.7, x-aH, y-bH*0.35+swing*0.3);
+  line(x, y-bH*0.7, x+aH, y-bH*0.35-swing*0.3);
+  // Legs
+  line(x, y, x-lH*0.45, y+lH-swing);
+  line(x, y, x+lH*0.45, y+lH+swing);
+
+  colorMode(HSB,360,100,100,100);
+}
+
+function drawDeathPieces() {
+  colorMode(RGB,255);
+  for (let p of deathPieces) {
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.35; p.rot+=p.rotV;
+    p.a=max(0,255*(1-deathTimer/CONFIG.DEATH_DURATION));
+    stroke(30,20,15,p.a); strokeWeight(2);
+    push(); translate(p.x,p.y); rotate(p.rot); line(-p.len/2,0,p.len/2,0); pop();
+  }
+  colorMode(HSB,360,100,100,100);
+}
+
+function drawBattery() {
+  colorMode(RGB,255);
+  if (batteryRecharging) {
+    let t = min(1,(millis()-rechargeStartTime)/RECHARGE_DURATION);
+    battery = min(100, rechargeStartVal+(100-rechargeStartVal)*t);
+    document.getElementById('battery-label').textContent='Battery: '+Math.round(battery)+'%';
+    if (t>=1) batteryRecharging=false;
+  }
+  batteryZoomScale += (batteryZoomTarget-batteryZoomScale)*0.12;
+  let bx,by,bw=28,bh=13;
+  if (batteryZoomed) { bw*=batteryZoomScale; bh*=batteryZoomScale; bx=width/2-bw/2; by=height/2-bh/2; }
+  else { bx=width-50; by=14; }
+  noFill(); stroke(40,40,40,130); strokeWeight(batteryZoomed?2:1); rect(bx,by,bw,bh,2);
+  fill(40,40,40,130); noStroke(); rect(bx+bw,by+bh*0.3,bw*0.1,bh*0.4,1);
+  let col=battery>25?[60,175,80]:[210,58,48];
+  fill(...col,185); noStroke();
+  let fw=map(battery,0,100,0,bw-2);
+  if(fw>0) rect(bx+1,by+1,fw,bh-2,1);
+  if (batteryZoomed) {
+    fill(30,20,15,180); textSize(13); textAlign(CENTER);
+    text(Math.round(battery)+'%', width/2, height/2+bh*0.5+22);
+    fill(30,20,15,100); textSize(9);
+    if (batteryRecharging) text("recharging...", width/2, height/2+bh*0.5+38);
+    else if (battery>=100) text("click to dismiss", width/2, height/2+bh*0.5+38);
+  }
+  colorMode(HSB,360,100,100,100);
+}
+
+// ── LOGIC ─────────────────────────────────────────────────
+function checkTrigger() {
+  if (!obstacleTriggered && charX >= obstacleX-CONFIG.OBSTACLE_TRIGGER_DIST) {
+    obstacleTriggered=true; obstacleVisible=true; obstacleY=groundY;
+  }
+}
+
+function checkCollision() {
+  if (!obstacleVisible) return;
+  let obstFullyUp = obstacleY <= groundY - CONFIG.OBSTACLE_HEIGHT * 0.55;
+  if (!obstFullyUp) return;
+  let hOverlap = abs(charX - obstacleX) < CONFIG.OBSTACLE_WIDTH * 0.6;
+  if (!hOverlap) return;
+  // If char's feet are above the spike tip — jumped over safely
+  let obstacleTip = groundY - CONFIG.OBSTACLE_HEIGHT;
+  if (charY < obstacleTip - 2) return;
+  // Death
+  isDead = true;
+  for (let i = 0; i < 7; i++) {
+    deathPieces.push({
+      x: charX+random(-8,8), y: charY-random(0,36),
+      vx: random(-3.5,3.5),  vy: random(-5.5,-0.5),
+      rot: random(TWO_PI),   rotV: random(-0.22,0.22),
+      len: random(10,24),    a: 255
+    });
+  }
+}
+
+function checkWin() {
+  if (charX >= width*CONFIG.GOAL_X_RATIO-14) { won=true; moving=false; }
+}
+
+// ── INPUT ─────────────────────────────────────────────────
+function keyPressed() {
+  // Toggle editor
+  if (key==='e'||key==='E') { toggleEditor(); return; }
+  if (gameState==="start") { gameState="playing"; return; }
+  if (!isDead&&!won) {
+    if (keyCode===RIGHT_ARROW||key==='d'||key==='D') moving=true;
+    if (keyCode===LEFT_ARROW ||key==='a'||key==='A') movingLeft=true;
+    if ((keyCode===UP_ARROW  ||key==='w'||key==='W')&&!isJumping) { isJumping=true; jumpVY=JUMP_FORCE; }
+  }
+  if (isDead&&deathTimer>CONFIG.DEATH_DURATION) { gameState="playing"; initLevel(); return; }
+  if (won) { if (level<CONFIG.TOTAL_LEVELS) { level++; gameState="playing"; initLevel(); } return; }
+}
+function keyReleased() {
+  if (keyCode===RIGHT_ARROW||key==='d'||key==='D') moving=false;
+  if (keyCode===LEFT_ARROW ||key==='a'||key==='A') movingLeft=false;
+}
+
+function mousePressed() {
+  if (gameState!=="playing") return;
+  if (batteryZoomed) { batteryZoomed=false; batteryZoomTarget=1; batteryRecharging=false; return; }
+  let bx=width-50,by=14,bw=28,bh=13;
+  if (mouseX>bx-10&&mouseX<bx+bw+16&&mouseY>by-10&&mouseY<by+bh+10) {
+    batteryZoomed=true; batteryZoomTarget=8; batteryZoomScale=1;
+    batteryRecharging=true; rechargeStartVal=battery; rechargeStartTime=millis();
+  }
+}
+
+// ── EDITOR ────────────────────────────────────────────────
+function toggleEditor() {
+  let ed=document.getElementById('editor');
+  ed.classList.toggle('open');
+  syncEditorToConfig();
+}
+
+function syncEditorToConfig() {
+  setSlider('e-hue',          'v-hue',        CONFIG.BG_HUE);
+  setSlider('e-sat-start',    'v-sat-start',  CONFIG.BG_SAT_START);
+  setSlider('e-sat-end',      'v-sat-end',    CONFIG.BG_SAT_END);
+  setSlider('e-brightness',   'v-brightness', CONFIG.BG_BRIGHTNESS);
+  setSlider('e-ground',       'v-ground',     CONFIG.GROUND_Y_RATIO);
+  setSlider('e-speed-start',  'v-speed-start',CONFIG.CHAR_SPEED_START);
+  setSlider('e-speed-loss',   'v-speed-loss', CONFIG.CHAR_SPEED_LOSS);
+  setSlider('e-speed-min',    'v-speed-min',  CONFIG.CHAR_MIN_SPEED);
+  setSlider('e-obs-h',        'v-obs-h',      CONFIG.OBSTACLE_HEIGHT);
+  setSlider('e-obs-w',        'v-obs-w',      CONFIG.OBSTACLE_WIDTH);
+  setSlider('e-obs-rise',     'v-obs-rise',   CONFIG.OBSTACLE_RISE_SPEED);
+  setSlider('e-obs-trig',     'v-obs-trig',   CONFIG.OBSTACLE_TRIGGER_DIST);
+  setSlider('e-goal-x',       'v-goal-x',     CONFIG.GOAL_X_RATIO);
+  setSlider('e-bat-drain',    'v-bat-drain',  CONFIG.BATTERY_DRAIN_PER_LEVEL);
+  setSlider('e-levels',       'v-levels',     CONFIG.TOTAL_LEVELS);
+  setSlider('e-shrink',       'v-shrink',     CONFIG.SHRINK_PER_LEVEL);
+  setNum('e-obs-r', CONFIG.OBSTACLE_COLOR[0]);
+  setNum('e-obs-g', CONFIG.OBSTACLE_COLOR[1]);
+  setNum('e-obs-b', CONFIG.OBSTACLE_COLOR[2]);
+  setNum('e-goal-r', CONFIG.GOAL_COLOR[0]);
+  setNum('e-goal-g', CONFIG.GOAL_COLOR[1]);
+  setNum('e-goal-b', CONFIG.GOAL_COLOR[2]);
+  buildLevelPosInputs();
+}
+
+function setSlider(id, valId, val) {
+  let el=document.getElementById(id);
+  if(el) el.value=val;
+  let vl=document.getElementById(valId);
+  if(vl) vl.textContent=val;
+  if(el) el.addEventListener('input',()=>{ if(vl) vl.textContent=el.value; });
+}
+function setNum(id,val) {
+  let el=document.getElementById(id); if(el) el.value=val;
+}
+
+function buildLevelPosInputs() {
+  let container=document.getElementById('level-positions');
+  container.innerHTML='';
+  for (let i=0;i<CONFIG.TOTAL_LEVELS;i++) {
+    let row=document.createElement('div');
+    row.className='level-obs-row';
+    let lbl=document.createElement('label');
+    lbl.textContent='Level '+(i+1);
+    let inp=document.createElement('input');
+    inp.type='number'; inp.min=50; inp.max=860;
+    inp.value=levelObstacleX[i]||400;
+    inp.dataset.lvl=i;
+    inp.addEventListener('input',()=>{ levelObstacleX[i]=parseInt(inp.value)||400; });
+    row.appendChild(lbl); row.appendChild(inp);
+    container.appendChild(row);
+  }
+}
+
+function readEditorToConfig() {
+  CONFIG.BG_HUE              = parseFloat(document.getElementById('e-hue').value);
+  CONFIG.BG_SAT_START        = parseFloat(document.getElementById('e-sat-start').value);
+  CONFIG.BG_SAT_END          = parseFloat(document.getElementById('e-sat-end').value);
+  CONFIG.BG_BRIGHTNESS       = parseFloat(document.getElementById('e-brightness').value);
+  CONFIG.GROUND_Y_RATIO      = parseFloat(document.getElementById('e-ground').value);
+  CONFIG.CHAR_SPEED_START    = parseFloat(document.getElementById('e-speed-start').value);
+  CONFIG.CHAR_SPEED_LOSS     = parseFloat(document.getElementById('e-speed-loss').value);
+  CONFIG.CHAR_MIN_SPEED      = parseFloat(document.getElementById('e-speed-min').value);
+  CONFIG.OBSTACLE_HEIGHT     = parseFloat(document.getElementById('e-obs-h').value);
+  CONFIG.OBSTACLE_WIDTH      = parseFloat(document.getElementById('e-obs-w').value);
+  CONFIG.OBSTACLE_RISE_SPEED = parseFloat(document.getElementById('e-obs-rise').value);
+  CONFIG.OBSTACLE_TRIGGER_DIST=parseFloat(document.getElementById('e-obs-trig').value);
+  CONFIG.GOAL_X_RATIO        = parseFloat(document.getElementById('e-goal-x').value);
+  CONFIG.BATTERY_DRAIN_PER_LEVEL=parseFloat(document.getElementById('e-bat-drain').value);
+  CONFIG.TOTAL_LEVELS        = parseInt(document.getElementById('e-levels').value);
+  CONFIG.SHRINK_PER_LEVEL    = parseFloat(document.getElementById('e-shrink').value);
+  CONFIG.OBSTACLE_COLOR      = [
+    parseInt(document.getElementById('e-obs-r').value)||195,
+    parseInt(document.getElementById('e-obs-g').value)||65,
+    parseInt(document.getElementById('e-obs-b').value)||42
+  ];
+  CONFIG.GOAL_COLOR = [
+    parseInt(document.getElementById('e-goal-r').value)||255,
+    parseInt(document.getElementById('e-goal-g').value)||210,
+    parseInt(document.getElementById('e-goal-b').value)||55
+  ];
+}
+
+function initEditorUI() {
+  document.getElementById('editor-close').addEventListener('click',()=>{
+    document.getElementById('editor').classList.remove('open');
+  });
+  document.getElementById('apply-btn').addEventListener('click',()=>{
+    readEditorToConfig();
+    buildLevelObstacles();
+    initLevel();
+    document.getElementById('editor').classList.remove('open');
+    gameState="playing";
+  });
+  document.getElementById('restart-game-btn').addEventListener('click',()=>{
+    readEditorToConfig();
+    buildLevelObstacles();
+    level=1;
+    initLevel();
+    document.getElementById('editor').classList.remove('open');
+    gameState="playing";
+  });
+  // Live preview sliders update CONFIG immediately for background
+  ['e-hue','e-sat-start','e-sat-end','e-brightness'].forEach(id=>{
+    document.getElementById(id).addEventListener('input',()=>{
+      CONFIG.BG_HUE        = parseFloat(document.getElementById('e-hue').value);
+      CONFIG.BG_SAT_START  = parseFloat(document.getElementById('e-sat-start').value);
+      CONFIG.BG_SAT_END    = parseFloat(document.getElementById('e-sat-end').value);
+      CONFIG.BG_BRIGHTNESS = parseFloat(document.getElementById('e-brightness').value);
+    });
+  });
+}
+</script>
+</body>
+</html>
